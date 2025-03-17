@@ -11,7 +11,7 @@ st.set_page_config(
 
 # Add app title and description at top of page
 st.title("OakNorth Grants Working Sheet")
-st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value. Grant values calculated are illustrative only, actual value may change depending on indivisual grant vesting schedules.")
+st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value. Grant values calculated are illustrative only, actual value may change depending on individual grant vesting schedules.")
 
 # Sidebar for inputs
 st.sidebar.header("Input Parameters")
