@@ -11,7 +11,7 @@ st.set_page_config(
 
 # Add app title and description at top of page
 st.title("OakNorth Grants Working Sheet")
-st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value. Grant values calculated are illustrative only, actual value may change depending on individual grant vesting schedules.")
+st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value. Grant values calculated are illustrative only, actual value may change depending on indivisual grant vesting schedules.")
 
 # Sidebar for inputs
 st.sidebar.header("Input Parameters")
@@ -343,7 +343,7 @@ if total_common_shares > 0:
         
         # Add disclaimer at bottom of tab
         st.markdown("---")
-        st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
+        st.caption("*The information presented in this work sheet is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this work sheet and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see detailed legal disclaimer in the presentation)*")
 
 # Tab 2: Options Results
 with tab2:
@@ -403,7 +403,7 @@ with tab2:
     
     # Add disclaimer at bottom of tab
     st.markdown("---")
-    st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
+    st.caption("*The information presented in this work sheet is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this work sheet and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see detailed legal disclaimer in the presentation)*")
 
 # Tab 3: Combined Analysis
 if total_common_shares > 0:
@@ -457,6 +457,4 @@ if total_common_shares > 0:
         
         # Add disclaimer at bottom of tab
         st.markdown("---")
-        st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
-
-")
+        st.caption("*The information presented in this work sheet is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this work sheet and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see detailed legal disclaimer in the presentation)*")
