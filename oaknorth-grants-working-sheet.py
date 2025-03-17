@@ -343,7 +343,7 @@ if total_common_shares > 0:
         
         # Add disclaimer at bottom of tab
         st.markdown("---")
-        st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
+        st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
 
 # Tab 2: Options Results
 with tab2:
@@ -403,7 +403,7 @@ with tab2:
     
     # Add disclaimer at bottom of tab
     st.markdown("---")
-    st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
+    st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
 
 # Tab 3: Combined Analysis
 if total_common_shares > 0:
@@ -457,4 +457,6 @@ if total_common_shares > 0:
         
         # Add disclaimer at bottom of tab
         st.markdown("---")
-        st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
+        st.caption("**Disclaimer**: The information presented in this presentation is confidential and intended solely for your own consumption. By accessing this presentation, you agree to treat this presentation and its contents as strictly confidential - It must not be shared, distributed, or disclosed to anyone within or outside OakNorth. The valuation scenarios provided are for illustrative purposes only and are not guaranteed. Future valuations are contingent upon the business achieving the 20/20 target, market conditions, and other internal and external factors, which may impact performance. (see full legal disclaimer in the supplement presentation.")
+
+")
