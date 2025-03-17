@@ -1,494 +1,614 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="OakNorth Grants Working Sheet", layout="wide")
+# Set page config first before any other Streamlit commands
+st.set_page_config(
+    page_title="OakNorth Grants Working Sheet",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# Add app title and description at top of page
 st.title("OakNorth Grants Working Sheet")
+st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value.")
 
-# Initialize time period (years 0-10)
-years = list(range(0, 11))
-
-# Define the sidebar inputs
+# Sidebar for inputs
 st.sidebar.header("Input Parameters")
 
-# PBT Growth Rate (at the top)
+# PBT Growth Rate
 pbt_growth_rate = st.sidebar.slider(
-    "PBT Growth Rate (%)", 
-    min_value=0.0, 
-    max_value=20.0, 
-    value=15.0, 
-    step=1.0,
-    help="Year-over-year growth rate of share price"
-) / 100.0  # Convert to decimal
+    "PBT Growth Rate", 
+    min_value=10, 
+    max_value=25,
+    value=20,
+    step=1,
+    help="Annual growth rate of share price"
+) / 100
 
-# Common Share Section
-st.sidebar.markdown("## Common Share")
+# Common Share section
+st.sidebar.header("Common Share")
 
-common_redemption_percentage = st.sidebar.slider(
-    "Common Share Redemption (%)", 
-    min_value=0.0, 
-    max_value=10.0, 
-    value=5.0, 
-    step=1.0,
-    help="Percentage of common shares to redeem each year"
-) / 100.0  # Convert to decimal
+# Common share redemption percentage using slider
+common_redemption_rate = st.sidebar.slider(
+    "Common Share Redemption Percentage", 
+    min_value=0, 
+    max_value=10,
+    value=5,
+    step=1,
+    help="Percentage of common shares to redeem each year starting from 2026"
+) / 100
 
+# Get total common shares
 total_common_shares = st.sidebar.number_input(
-    "Total Common Shares", 
-    min_value=1, 
-    value=10000, 
+    "Total Common Shares",
+    min_value=0,
+    value=10000,
     step=100,
-    help="Total number of common shares granted"
+    help="Total number of common shares"
 )
 
+# Common share purchase price
 common_purchase_price = st.sidebar.number_input(
-    "Common Share Purchase Price ($)", 
-    min_value=0.01, 
-    value=1.00, 
+    "Common Share Purchase Price (£)",
+    min_value=0.01,
+    value=2.00,
     step=0.01,
-    help="Price at which common shares were purchased"
+    format="%.2f",
+    help="Initial purchase price of common shares"
 )
 
-# A-Share / Options Section
-st.sidebar.markdown("## A-Share / Options")
+# A-Share / Options section
+st.sidebar.header("A-Share / Options")
 
-options_redemption_percentage = st.sidebar.slider(
-    "A-Share/Options Redemption (%)", 
-    min_value=0.0, 
-    max_value=10.0, 
-    value=5.0, 
-    step=1.0,
-    help="Percentage of vested unsold options to redeem each year"
-) / 100.0  # Convert to decimal
+# A-Share/Options redemption percentage using slider
+option_redemption_rate = st.sidebar.slider(
+    "A-Share/Options Redemption Percentage", 
+    min_value=0, 
+    max_value=10,
+    value=5,
+    step=1,
+    help="Percentage of vested unsold A-Share/Options to redeem each year"
+) / 100
 
+# Get strike price
 strike_price = st.sidebar.number_input(
-    "Strike Price ($)", 
-    min_value=0.01, 
-    value=10.00, 
+    "Strike Price (£)",
+    min_value=0.01,
+    value=6.00,
     step=0.01,
-    help="Price at which options can be exercised"
+    format="%.2f",
+    help="Initial strike price of options"
 )
 
+# Get total grant shares
 total_grant_shares = st.sidebar.number_input(
-    "Total Grant Shares", 
-    min_value=1, 
-    value=10000, 
+    "Total Grant Shares",
+    min_value=1,
+    max_value=1000000,  # Maximum 1,000,000
+    value=100000,
     step=100,
-    help="Total number of option shares granted"
+    help="Total number of shares in the grant"
 )
 
-# Vesting schedule
-st.sidebar.caption("Vesting Schedule (cumulative % of total shares)")
-vesting_schedule = {}
-for year in range(1, 11):
-    default_value = min(25.0 * year, 100.0)  # Default 25% vest per year for first 4 years, then 100%
-    vesting_schedule[year] = st.sidebar.number_input(
-        f"Year {year} Vesting (%)", 
-        min_value=0.0, 
-        max_value=100.0, 
-        value=default_value, 
-        step=1.0,
-        key=f"vest_{year}"
-    ) / 100.0  # Convert to decimal
+# Cumulative vesting schedule inputs
+st.sidebar.subheader("Cumulative Vesting Schedule")
 
-# Add option to start redemption in year 2
-start_redemption_year = st.sidebar.selectbox(
-    "Start Redemption in Year",
-    options=[1, 2, 3],
-    index=1,  # Default to year 2
-    help="Year to start redeeming shares"
-)
+# Define vesting_method variable before it's used
+vesting_method = "Custom Vesting"  # Default value
 
-# Calculate Common Share values
-def calculate_common_share_values():
-    # Initialize arrays
-    share_price = [0] * 11
-    share_price[0] = common_purchase_price  # Initial share price at year 0
-    
-    unsold_shares = [0] * 11
-    unsold_shares[0] = total_common_shares  # All shares are unsold at year 0
-    
-    redeemed_shares = [0] * 11
-    cumulative_redeemed_shares = [0] * 11
-    
-    redemption_value = [0] * 11
-    cumulative_redemption_value = [0] * 11
-    
-    value_of_unsold_shares = [0] * 11
-    total_grant_value = [0] * 11
-    
-    # Year 0 calculations
-    value_of_unsold_shares[0] = 0  # No value above purchase price in year 0
-    
-    # Calculate for years 1-10
-    for year in range(1, 11):
-        # Share price calculation
-        share_price[year] = share_price[year-1] * (1 + pbt_growth_rate)
-        
-        # No redemption before start year
-        if year < start_redemption_year:
-            redeemed_shares[year] = 0
-        else:
-            # Redeemed shares
-            redeemed_shares[year] = unsold_shares[year-1] * common_redemption_percentage
-        
-        # Update cumulative redeemed shares
-        cumulative_redeemed_shares[year] = cumulative_redeemed_shares[year-1] + redeemed_shares[year]
-        
-        # Unsold shares
-        unsold_shares[year] = total_common_shares - cumulative_redeemed_shares[year]
-        
-        # Redemption value
-        redemption_value[year] = max(0, (share_price[year] - common_purchase_price)) * redeemed_shares[year]
-        
-        # Update cumulative redemption value
-        cumulative_redemption_value[year] = cumulative_redemption_value[year-1] + redemption_value[year]
-        
-        # Value of unsold shares
-        value_of_unsold_shares[year] = max(0, (share_price[year] - common_purchase_price)) * unsold_shares[year]
-        
-        # Total grant value
-        total_grant_value[year] = cumulative_redemption_value[year] + value_of_unsold_shares[year]
-    
-    # Create DataFrame for display
-    df = pd.DataFrame(index=range(0, 11))
-    df["Year"] = range(0, 11)
-    df["Share Price ($)"] = share_price
-    df["Redeemed Shares"] = redeemed_shares
-    df["Cumulative Redeemed Shares"] = cumulative_redeemed_shares
-    df["Unsold Shares"] = unsold_shares
-    df["Redemption Value ($)"] = redemption_value
-    df["Cumulative Redemption Value ($)"] = cumulative_redemption_value
-    df["Value of Unsold Shares ($)"] = value_of_unsold_shares
-    df["Total Grant Value ($)"] = total_grant_value
-    
-    # Set Year as index
-    df = df.set_index("Year")
-    
-    return df
+# Set default values for all years
+default_values = {
+    2025: 60000,
+    2026: 70000,
+    2027: 80000,
+    2028: 90000,
+    2029: 100000
+}
 
-# Calculate Option values
-def calculate_option_values():
-    # Initialize arrays
-    share_price = [0] * 11
-    share_price[0] = strike_price  # Initial share price at year 0 is strike price
+# Initialize vested_shares_input dictionary with all years
+years_range = range(2025, 2036)
+vested_shares_input = {}
+
+# Fill default values for all years with safety checks
+for year in years_range:
+    if year in default_values:
+        # Ensure we don't exceed the total grant shares
+        default_value = min(default_values[year], total_grant_shares) 
+        vested_shares_input[year] = default_value
+    else:
+        # Ensure we don't exceed the total grant shares
+        vested_shares_input[year] = min(100000, total_grant_shares)
+
+# Create columns for input layout
+col1, col2 = st.sidebar.columns(2)
+
+# Year distribution between columns
+first_half = list(years_range)[:len(list(years_range))//2 + 1]
+second_half = list(years_range)[len(list(years_range))//2 + 1:]
+
+if vesting_method == "Custom Vesting":
+    # Custom vesting inputs
+    st.sidebar.write("Enter cumulative vested shares for each year:")
     
-    vested_shares = [0] * 11
-    vested_shares[0] = 0  # No vested shares at year 0
+    # Use columns for more compact layout
+    col1, col2 = st.sidebar.columns(2)
     
-    redeemed_shares = [0] * 11
-    cumulative_redeemed_shares = [0] * 11
+    # Year distribution between columns
+    first_half = list(years_range)[:len(list(years_range))//2 + 1]
+    second_half = list(years_range)[len(list(years_range))//2 + 1:]
     
-    unsold_shares = [0] * 11
-    unsold_shares[0] = total_grant_shares  # All shares are unsold at year 0
-    
-    redemption_value = [0] * 11
-    cumulative_redemption_value = [0] * 11
-    
-    value_of_unsold_shares = [0] * 11
-    total_grant_value = [0] * 11
-    
-    # Calculate for years 1-10
-    for year in range(1, 11):
-        # Share price calculation
-        share_price[year] = share_price[year-1] * (1 + pbt_growth_rate)
+    try:
+        with col1:
+            for year in first_half:
+                default_value = default_values.get(year, 100000)  # Use the default values dictionary
+                # Ensure default value doesn't exceed total grant shares
+                default_value = min(default_value, int(total_grant_shares))
+                # Custom number input without +/- buttons
+                vested_shares_input[year] = st.text_input(
+                    f"{year}",
+                    value=str(default_value),
+                    key=f"vest_{year}"
+                )
+                # Convert input to integer with validation
+                try:
+                    vested_shares_input[year] = int(vested_shares_input[year])
+                    # Apply constraints
+                    vested_shares_input[year] = min(max(0, vested_shares_input[year]), min(1000000, int(total_grant_shares)))
+                except:
+                    vested_shares_input[year] = default_value
         
-        # Vested shares (cumulative)
-        vested_shares[year] = total_grant_shares * vesting_schedule[year]
+        with col2:
+            for year in second_half:
+                default_value = min(100000, int(total_grant_shares))
+                # Custom number input without +/- buttons
+                vested_shares_input[year] = st.text_input(
+                    f"{year}",
+                    value=str(default_value),
+                    key=f"vest_{year}"
+                )
+                # Convert input to integer with validation
+                try:
+                    vested_shares_input[year] = int(vested_shares_input[year])
+                    # Apply constraints
+                    vested_shares_input[year] = min(max(0, vested_shares_input[year]), min(1000000, int(total_grant_shares)))
+                except:
+                    vested_shares_input[year] = default_value
+    except Exception as e:
+        st.sidebar.error(f"Error with custom vesting inputs: {str(e)}")
+        # Fall back to default vesting if custom fails
+        for year in years_range:
+            if year in default_values:
+                # Ensure we don't exceed the total grant shares
+                default_value = min(default_values[year], total_grant_shares) 
+                vested_shares_input[year] = default_value
+            else:
+                # Ensure we don't exceed the total grant shares
+                vested_shares_input[year] = min(100000, total_grant_shares)
+
+    # Validation check to ensure vesting is non-decreasing or provide warning
+    sorted_years = sorted(vested_shares_input.keys())
+    for i in range(1, len(sorted_years)):
+        current_year = sorted_years[i]
+        prev_year = sorted_years[i-1]
+        if vested_shares_input[current_year] < vested_shares_input[prev_year]:
+            st.sidebar.warning(f"Note: Vested shares for {current_year} are less than {prev_year}. Typically vesting increases or stays the same each year.")
+else:
+    # Default schedule is used but not displayed
+    # Simply use the default values, but don't show the schedule in the sidebar
+    
+    try:
+        with col1:
+            for year in first_half:
+                default_value = default_values.get(year, 100000)  # Use the default values dictionary
+                # Ensure default value doesn't exceed total grant shares
+                default_value = min(default_value, int(total_grant_shares))
+                # Custom number input without +/- buttons
+                vested_shares_input[year] = st.sidebar.text_input(
+                    f"{year}",
+                    value=str(default_value),
+                    key=f"vest_{year}"
+                )
+                # Convert input to integer with validation
+                try:
+                    vested_shares_input[year] = int(vested_shares_input[year])
+                    # Apply constraints
+                    vested_shares_input[year] = min(max(0, vested_shares_input[year]), min(1000000, int(total_grant_shares)))
+                except:
+                    vested_shares_input[year] = default_value
         
-        # No redemption before start year
-        if year < start_redemption_year:
-            redeemed_shares[year] = 0
-        else:
-            # Redeemed shares
-            unvested_shares_prev_year = unsold_shares[year-1]
-            redeemed_shares[year] = unvested_shares_prev_year * options_redemption_percentage
+        with col2:
+            for year in second_half:
+                default_value = min(100000, int(total_grant_shares))
+                # Custom number input without +/- buttons
+                vested_shares_input[year] = st.sidebar.text_input(
+                    f"{year}",
+                    value=str(default_value),
+                    key=f"vest_{year}"
+                )
+                # Convert input to integer with validation
+                try:
+                    vested_shares_input[year] = int(vested_shares_input[year])
+                    # Apply constraints
+                    vested_shares_input[year] = min(max(0, vested_shares_input[year]), min(1000000, int(total_grant_shares)))
+                except:
+                    vested_shares_input[year] = default_value
+    except Exception as e:
+        st.sidebar.error(f"Error with custom vesting inputs: {str(e)}")
+        # Fall back to default vesting if custom fails
+        for year in years_range:
+            if year in default_values:
+                # Ensure we don't exceed the total grant shares
+                default_value = min(default_values[year], total_grant_shares) 
+                vested_shares_input[year] = default_value
+            else:
+                # Ensure we don't exceed the total grant shares
+                vested_shares_input[year] = min(100000, total_grant_shares)
+
+    # Validation check to ensure vesting is non-decreasing or provide warning
+    sorted_years = sorted(vested_shares_input.keys())
+    for i in range(1, len(sorted_years)):
+        current_year = sorted_years[i]
+        prev_year = sorted_years[i-1]
+        if vested_shares_input[current_year] < vested_shares_input[prev_year]:
+            st.sidebar.warning(f"Note: Vested shares for {current_year} are less than {prev_year}. Typically vesting increases or stays the same each year.")
+
+# Function to calculate results for specific redemption rates
+def calculate_results(growth_rate=None, custom_common_redemption=None, custom_option_redemption=None):
+    # Use the provided parameters or default to the global values
+    if growth_rate is None:
+        current_growth_rate = pbt_growth_rate
+    else:
+        current_growth_rate = growth_rate
+    
+    if custom_common_redemption is None:
+        current_common_redemption = common_redemption_rate
+    else:
+        current_common_redemption = custom_common_redemption
         
-        # Update cumulative redeemed shares
-        cumulative_redeemed_shares[year] = cumulative_redeemed_shares[year-1] + redeemed_shares[year]
+    if custom_option_redemption is None:
+        current_option_redemption = option_redemption_rate
+    else:
+        current_option_redemption = custom_option_redemption
         
-        # Unsold shares
-        unsold_shares[year] = total_grant_shares - cumulative_redeemed_shares[year]
+    years = list(range(2024, 2036))
+    results = {}
+    
+    # Initialize objects for all years
+    for year in years:
+        results[year] = {}
+    
+    # Calculate share price series
+    results[2024]['Share Price'] = 6.00  # Base price in 2024
+    for year in range(2025, 2036):
+        results[year]['Share Price'] = results[year-1]['Share Price'] * (1 + current_growth_rate)
+    
+    # Common Share calculations
+    for year in years:
+        results[year]['Common Shares Redeemed'] = 0.0
+        results[year]['Cumulative Common Redeemed'] = 0.0
+        results[year]['Unsold Common Shares'] = 0.0
+        results[year]['Common Redemption Value'] = 0.0
+        results[year]['Cumulative Common Redemption Value'] = 0.0
+        results[year]['Value of Unsold Common Shares'] = 0.0
+        results[year]['Total Common Share Value'] = 0.0
+    
+    # Initialize 2024 values
+    results[2024]['Unsold Common Shares'] = total_common_shares
+    
+    # 2025 calculations (no redemption in first year)
+    results[2025]['Common Shares Redeemed'] = 0
+    results[2025]['Cumulative Common Redeemed'] = 0
+    results[2025]['Unsold Common Shares'] = total_common_shares
+    results[2025]['Common Redemption Value'] = 0
+    results[2025]['Cumulative Common Redemption Value'] = 0
+    
+    # Calculate value of unsold common shares for 2025
+    common_price_diff_2025 = max(0, results[2025]['Share Price'] - common_purchase_price)
+    results[2025]['Value of Unsold Common Shares'] = common_price_diff_2025 * results[2025]['Unsold Common Shares']
+    results[2025]['Total Common Share Value'] = results[2025]['Value of Unsold Common Shares']
+    
+    # Calculate common share values for 2026-2035
+    for year in range(2026, 2036):
+        # Common shares redeemed this year (% of previous year's unsold shares)
+        results[year]['Common Shares Redeemed'] = results[year-1]['Unsold Common Shares'] * current_common_redemption
         
-        # Redemption value
-        redemption_value[year] = max(0, (share_price[year] - strike_price)) * redeemed_shares[year]
+        # Cumulative common shares redeemed
+        results[year]['Cumulative Common Redeemed'] = results[year-1]['Cumulative Common Redeemed'] + results[year]['Common Shares Redeemed']
         
-        # Update cumulative redemption value
-        cumulative_redemption_value[year] = cumulative_redemption_value[year-1] + redemption_value[year]
+        # Unsold common shares
+        results[year]['Unsold Common Shares'] = total_common_shares - results[year]['Cumulative Common Redeemed']
         
-        # Value of unsold shares
-        value_of_unsold_shares[year] = max(0, (share_price[year] - strike_price)) * unsold_shares[year]
+        # Common redemption value = (share price - common purchase price) * common shares redeemed
+        common_price_diff = max(0, results[year]['Share Price'] - common_purchase_price)
+        results[year]['Common Redemption Value'] = common_price_diff * results[year]['Common Shares Redeemed']
         
-        # Total grant value
-        total_grant_value[year] = cumulative_redemption_value[year] + value_of_unsold_shares[year]
-    
-    # Create DataFrame for display
-    df = pd.DataFrame(index=range(0, 11))
-    df["Year"] = range(0, 11)
-    df["Share Price ($)"] = share_price
-    df["Vested Shares"] = vested_shares
-    df["Redeemed Shares"] = redeemed_shares
-    df["Cumulative Redeemed Shares"] = cumulative_redeemed_shares
-    df["Unsold Shares"] = unsold_shares
-    df["Redemption Value ($)"] = redemption_value
-    df["Cumulative Redemption Value ($)"] = cumulative_redemption_value
-    df["Value of Unsold Shares ($)"] = value_of_unsold_shares
-    df["Total Grant Value ($)"] = total_grant_value
-    
-    # Set Year as index
-    df = df.set_index("Year")
-    
-    return df
-
-# Calculate combined grant values
-def calculate_combined_values(common_df, options_df):
-    combined_df = pd.DataFrame(index=range(0, 11))
-    combined_df["Year"] = range(0, 11)
-    combined_df["Common Share Value ($)"] = common_df["Total Grant Value ($)"]
-    combined_df["A-Share/Options Value ($)"] = options_df["Total Grant Value ($)"]
-    combined_df["Combined Total Value ($)"] = combined_df["Common Share Value ($)"] + combined_df["A-Share/Options Value ($)"]
-    combined_df = combined_df.set_index("Year")
-    return combined_df
-
-# Calculate results
-common_results = calculate_common_share_values()
-options_results = calculate_option_values()
-combined_results = calculate_combined_values(common_results, options_results)
-
-# Format for display
-def format_dataframe(df):
-    formatted_df = df.copy()
-    for col in formatted_df.columns:
-        if "Value" in col or "Price" in col:
-            formatted_df[col] = formatted_df[col].map('${:,.2f}'.format)
-        elif "Shares" in col:
-            formatted_df[col] = formatted_df[col].map('{:,.0f}'.format)
-    return formatted_df
-
-formatted_common = format_dataframe(common_results)
-formatted_options = format_dataframe(options_results)
-formatted_combined = format_dataframe(combined_results)
-
-# Display Common Share results
-st.header("Common Share Grant Value")
-st.dataframe(formatted_common[["Share Price ($)", "Redeemed Shares", "Redemption Value ($)", 
-                             "Cumulative Redemption Value ($)", "Unsold Shares", 
-                             "Value of Unsold Shares ($)", "Total Grant Value ($)"]], 
-             use_container_width=True)
-
-# Display Option results
-st.header("A-Share / Options Grant Value")
-st.dataframe(formatted_options[["Share Price ($)", "Vested Shares", "Redeemed Shares", 
-                              "Redemption Value ($)", "Cumulative Redemption Value ($)", 
-                              "Unsold Shares", "Value of Unsold Shares ($)", "Total Grant Value ($)"]], 
-             use_container_width=True)
-
-# Display Combined results
-st.header("Combined Grants Value")
-st.dataframe(formatted_combined, use_container_width=True)
-
-# Visualizations section
-st.header("Grant Value Visualizations")
-
-# Create visualization tabs
-tab1, tab2, tab3 = st.tabs(["Common Share Value", "A-Share/Options Value", "Combined Value"])
-
-# Function to calculate values at different redemption rates
-def calculate_at_different_rates(pbt=0.15, redemption_rates=[0.00, 0.05, 0.10]):
-    common_values = []
-    option_values = []
-    
-    for rate in redemption_rates:
-        # Calculate common share values with this rate
-        temp_common = calculate_common_share_values_for_viz(rate, pbt)
-        common_values.append(temp_common["Total Grant Value ($)"].iloc[1:10])  # Years 1-9
+        # Cumulative common redemption value
+        results[year]['Cumulative Common Redemption Value'] = results[year-1]['Cumulative Common Redemption Value'] + results[year]['Common Redemption Value']
         
-        # Calculate option values with this rate
-        temp_option = calculate_option_values_for_viz(rate, pbt)
-        option_values.append(temp_option["Total Grant Value ($)"].iloc[1:10])  # Years 1-9
-    
-    return common_values, option_values
-
-def calculate_common_share_values_for_viz(redemption_rate, pbt_rate):
-    # Modified version of calculate_common_share_values for visualization
-    # Similar code but using the passed parameters instead of globals
-    # Initialize arrays
-    share_price = [0] * 11
-    share_price[0] = common_purchase_price
-    
-    unsold_shares = [0] * 11
-    unsold_shares[0] = total_common_shares
-    
-    redeemed_shares = [0] * 11
-    cumulative_redeemed_shares = [0] * 11
-    
-    redemption_value = [0] * 11
-    cumulative_redemption_value = [0] * 11
-    
-    value_of_unsold_shares = [0] * 11
-    total_grant_value = [0] * 11
-    
-    for year in range(1, 11):
-        share_price[year] = share_price[year-1] * (1 + pbt_rate)
+        # Value of unsold common shares
+        results[year]['Value of Unsold Common Shares'] = common_price_diff * results[year]['Unsold Common Shares']
         
-        if year < start_redemption_year:
-            redeemed_shares[year] = 0
-        else:
-            redeemed_shares[year] = unsold_shares[year-1] * redemption_rate
+        # Total common share value
+        results[year]['Total Common Share Value'] = results[year]['Cumulative Common Redemption Value'] + results[year]['Value of Unsold Common Shares']
+    
+    # A-Share/Options calculations
+    for year in years:
+        results[year]['Vested Shares'] = 0
+        results[year]['Vested Unsold Shares'] = 0.0
+        results[year]['Redeemed Shares'] = 0.0
+        results[year]['Cumulative Redeemed'] = 0.0
+        results[year]['Unsold Shares'] = 0.0
+        results[year]['Redemption Value'] = 0.0
+        results[year]['Cumulative Redemption Value'] = 0.0
+        results[year]['Value of Unsold Shares'] = 0.0
+        results[year]['Total Grant Value'] = 0.0
+    
+    # Initialize 2024 values
+    results[2024]['Unsold Shares'] = total_grant_shares
+    
+    # 2025 calculations (no redemption in first year)
+    # Safely get vested shares for 2025 with a fallback
+    vested_2025 = vested_shares_input.get(2025, 0)
+    if vested_2025 is None or vested_2025 < 0 or vested_2025 > total_grant_shares:
+        vested_2025 = min(60000, total_grant_shares)  # Use default with constraint
         
-        cumulative_redeemed_shares[year] = cumulative_redeemed_shares[year-1] + redeemed_shares[year]
-        unsold_shares[year] = total_common_shares - cumulative_redeemed_shares[year]
-        redemption_value[year] = max(0, (share_price[year] - common_purchase_price)) * redeemed_shares[year]
-        cumulative_redemption_value[year] = cumulative_redemption_value[year-1] + redemption_value[year]
-        value_of_unsold_shares[year] = max(0, (share_price[year] - common_purchase_price)) * unsold_shares[year]
-        total_grant_value[year] = cumulative_redemption_value[year] + value_of_unsold_shares[year]
+    results[2025]['Vested Shares'] = vested_2025
+    results[2025]['Redeemed Shares'] = 0
+    results[2025]['Cumulative Redeemed'] = 0
+    results[2025]['Vested Unsold Shares'] = results[2025]['Vested Shares']
+    results[2025]['Unsold Shares'] = total_grant_shares
+    results[2025]['Redemption Value'] = 0
+    results[2025]['Cumulative Redemption Value'] = 0
     
-    df = pd.DataFrame(index=range(0, 11))
-    df["Year"] = range(0, 11)
-    df["Total Grant Value ($)"] = total_grant_value
-    df = df.set_index("Year")
+    # Calculate value of unsold shares for 2025
+    share_price_diff_2025 = max(0, results[2025]['Share Price'] - strike_price)
+    results[2025]['Value of Unsold Shares'] = share_price_diff_2025 * results[2025]['Vested Shares']  # Only count vested shares
+    results[2025]['Total Grant Value'] = results[2025]['Value of Unsold Shares']
     
-    return df
-
-def calculate_option_values_for_viz(redemption_rate, pbt_rate):
-    # Modified version of calculate_option_values for visualization
-    # Similar code but using the passed parameters instead of globals
-    share_price = [0] * 11
-    share_price[0] = strike_price
-    
-    vested_shares = [0] * 11
-    vested_shares[0] = 0
-    
-    redeemed_shares = [0] * 11
-    cumulative_redeemed_shares = [0] * 11
-    
-    unsold_shares = [0] * 11
-    unsold_shares[0] = total_grant_shares
-    
-    redemption_value = [0] * 11
-    cumulative_redemption_value = [0] * 11
-    
-    value_of_unsold_shares = [0] * 11
-    total_grant_value = [0] * 11
-    
-    for year in range(1, 11):
-        share_price[year] = share_price[year-1] * (1 + pbt_rate)
-        vested_shares[year] = total_grant_shares * vesting_schedule[year]
+    # Calculate option values for 2026-2035
+    for year in range(2026, 2036):
+        # Vested shares for this year from input (safely with a default)
+        vested_shares = vested_shares_input.get(year, vested_shares_input.get(year-1, 0))
         
-        if year < start_redemption_year:
-            redeemed_shares[year] = 0
-        else:
-            unvested_shares_prev_year = unsold_shares[year-1]
-            redeemed_shares[year] = unvested_shares_prev_year * redemption_rate
+        # Safety check for valid vested shares
+        if vested_shares is None or vested_shares < 0 or vested_shares > total_grant_shares:
+            # Use previous year's value or default
+            vested_shares = min(results[year-1]['Vested Shares'] + 5000, total_grant_shares)
+            
+        results[year]['Vested Shares'] = vested_shares
         
-        cumulative_redeemed_shares[year] = cumulative_redeemed_shares[year-1] + redeemed_shares[year]
-        unsold_shares[year] = total_grant_shares - cumulative_redeemed_shares[year]
-        redemption_value[year] = max(0, (share_price[year] - strike_price)) * redeemed_shares[year]
-        cumulative_redemption_value[year] = cumulative_redemption_value[year-1] + redemption_value[year]
-        value_of_unsold_shares[year] = max(0, (share_price[year] - strike_price)) * unsold_shares[year]
-        total_grant_value[year] = cumulative_redemption_value[year] + value_of_unsold_shares[year]
+        # Redeemed shares for this year (% of previous year's vested unsold shares)
+        results[year]['Redeemed Shares'] = results[year-1]['Vested Unsold Shares'] * current_option_redemption
+        
+        # Cumulative redeemed shares
+        results[year]['Cumulative Redeemed'] = results[year-1]['Cumulative Redeemed'] + results[year]['Redeemed Shares']
+        
+        # Vested unsold shares = vested shares - cumulative redeemed
+        results[year]['Vested Unsold Shares'] = max(0, results[year]['Vested Shares'] - results[year]['Cumulative Redeemed'])
+        
+        # Unsold shares = total - cumulative redeemed
+        results[year]['Unsold Shares'] = total_grant_shares - results[year]['Cumulative Redeemed']
+        
+        # Redemption value = (share price - strike price) * redeemed shares
+        share_price_diff = max(0, results[year]['Share Price'] - strike_price)
+        results[year]['Redemption Value'] = share_price_diff * results[year]['Redeemed Shares']
+        
+        # Cumulative redemption value
+        results[year]['Cumulative Redemption Value'] = results[year-1]['Cumulative Redemption Value'] + results[year]['Redemption Value']
+        
+        # Value of unsold shares (only count vested ones)
+        results[year]['Value of Unsold Shares'] = share_price_diff * results[year]['Vested Unsold Shares']
+        
+        # Total grant value = cumulative redemption value + value of unsold shares
+        results[year]['Total Grant Value'] = results[year]['Cumulative Redemption Value'] + results[year]['Value of Unsold Shares']
     
-    df = pd.DataFrame(index=range(0, 11))
-    df["Year"] = range(0, 11)
-    df["Total Grant Value ($)"] = total_grant_value
-    df = df.set_index("Year")
+    # Calculate combined values
+    for year in range(2025, 2036):
+        results[year]['Combined Total Value'] = results[year]['Total Common Share Value'] + results[year]['Total Grant Value']
     
-    return df
+    return results
 
-# Calculate values for different redemption rates
-redemption_rates = [0.00, 0.05, 0.10]
-rate_labels = ["0% Redemption", "5% Redemption", "10% Redemption"]
-common_values, option_values = calculate_at_different_rates(pbt_growth_rate, redemption_rates)
+# Try to calculate results and handle any errors
+try:
+    # Calculate results 
+    results = calculate_results()
+except Exception as e:
+    st.error(f"An error occurred during calculations: {str(e)}")
+    # Provide more detailed error information
+    import traceback
+    st.code(traceback.format_exc(), language="python")
+    
+    # Provide fallback calculation with conservative values
+    try:
+        st.warning("Attempting fallback calculation with conservative values.")
+        # Use fixed conservative values
+        fixed_pbt_growth_rate = 0.10
+        fixed_common_redemption_rate = 0.05
+        fixed_option_redemption_rate = 0.05
+        results = calculate_results(fixed_pbt_growth_rate, fixed_common_redemption_rate, fixed_option_redemption_rate)
+    except Exception as e2:
+        st.error(f"Fallback calculation also failed: {str(e2)}")
+        st.stop()  # Stop execution if fallback also fails
 
-# Common Share Value tab
-with tab1:
-    st.subheader("Common Share Grant Value at Various Redemption Rates")
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for i, rate in enumerate(redemption_rates):
-        ax.plot(range(1, 10), common_values[i], marker='o', label=f"{int(rate*100)}% Redemption")
-    
-    ax.set_xlabel('Year')
-    ax.set_ylabel('Total Grant Value ($)')
-    ax.set_title('Common Share Grant Value Over Time')
-    ax.legend()
-    ax.grid(True)
-    
-    st.pyplot(fig)
+# Create tabs based on whether common shares exist
+try:
+    if total_common_shares > 0:
+        tab1, tab2, tab3 = st.tabs(["Common Share Analysis", "A-Share/Options Analysis", "Combined Analysis"])
+    else:
+        # Only show options tab if no common shares
+        tab2 = st.container()  # Use a container instead of tabs
+        st.info("Common Share Analysis and Combined Analysis tabs are hidden because Total Common Shares is set to 0.")
+except Exception as e:
+    st.error(f"Error creating tabs: {str(e)}")
+    # Fallback to using simple containers
+    st.warning("Using simplified layout due to tab creation error.")
+    tab1, tab2, tab3 = st.container(), st.container(), st.container()
 
-# A-Share/Options Value tab
+# Tab 1: Common Shares Results and Sensitivity Chart
+if total_common_shares > 0:
+    with tab1:
+        st.header("Common Share Grant Value")
+        st.markdown(f"**Common Share Redemption Rate: {int(common_redemption_rate*100)}%, PBT Growth: {int(pbt_growth_rate*100)}%**")
+        
+        # Common Shares Summary Table
+        common_years = list(range(2025, 2036))  # Start from 2025 as requested
+        common_data = {
+            "Year": common_years,
+            "Share Price (£)": [f"£{results[year]['Share Price']:.0f}" for year in common_years],
+            "Proceeds from Redemption (£)": [f"£{results[year]['Cumulative Common Redemption Value']:,.0f}" for year in common_years],
+            "Value of Unsold Shares (£)": [f"£{results[year]['Value of Unsold Common Shares']:,.0f}" for year in common_years],
+            "Total Common Share Value (£)": [f"£{results[year]['Total Common Share Value']:,.0f}" for year in common_years]
+        }
+        common_df = pd.DataFrame(common_data)
+        st.dataframe(common_df, use_container_width=True, hide_index=True)
+        
+        # Common Share Sensitivity Analysis (redemption rates with fixed 20% PBT growth)
+        try:
+            st.subheader("Common Share Value Sensitivity to Redemption Rate (£ thousands)")
+            st.caption("Fixed assumption: PBT Growth Rate = 20%")
+            
+            # Fixed PBT growth of 20%
+            fixed_growth = 0.20
+            
+            # Redemption rates to analyze
+            redemption_rates = [0.00, 0.05, 0.10]  # 0%, 5%, 10%
+            
+            # Generate data for each redemption rate
+            chart_data = {}
+            
+            # Calculate values for each redemption rate
+            for rate in redemption_rates:
+                rate_results = calculate_results(fixed_growth, rate, None)
+                chart_data[f"{int(rate*100)}% Redemption"] = [
+                    int(round(rate_results[year]['Total Common Share Value'] / 1000, 0))
+                    for year in common_years
+                ]
+            
+            # Create DataFrame with year labels as strings to maintain formatting
+            year_labels = [str(year) for year in common_years]
+            chart_df = pd.DataFrame(chart_data, index=year_labels)
+            
+            # Plot line chart
+            st.line_chart(chart_df)
+        except Exception as e:
+            st.warning(f"Could not display common share sensitivity chart: {str(e)}")
+            st.write("Please check your inputs for potential issues.")
+        
+        # Add disclaimer at bottom of tab
+        st.markdown("---")
+        st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
+
+# Tab 2: Options Results
 with tab2:
-    st.subheader("A-Share/Options Grant Value at Various Redemption Rates")
+    st.header("A-Share/Options Grant Value")
+    st.markdown(f"**A-Share/Options Redemption Rate: {int(option_redemption_rate*100)}%, PBT Growth: {int(pbt_growth_rate*100)}%**")
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for i, rate in enumerate(redemption_rates):
-        ax.plot(range(1, 10), option_values[i], marker='o', label=f"{int(rate*100)}% Redemption")
+    # Vesting schedule is used in calculations but not displayed in UI
+    # (Removed cumulative vesting schedule table as requested)
     
-    ax.set_xlabel('Year')
-    ax.set_ylabel('Total Grant Value ($)')
-    ax.set_title('A-Share/Options Grant Value Over Time')
-    ax.legend()
-    ax.grid(True)
+    # Options Summary Table - Simplified columns
+    try:
+        option_years = list(range(2025, 2036))
+        option_data = {
+            "Year": option_years,
+            "Share Price (£)": [f"£{results[year]['Share Price']:.0f}" for year in option_years],
+            "Proceeds from Redemption (£)": [f"£{results[year]['Cumulative Redemption Value']:,.0f}" for year in option_years],
+            "Value of Unsold Shares (£)": [f"£{results[year]['Value of Unsold Shares']:,.0f}" for year in option_years],
+            "Total Grant Value (£)": [f"£{results[year]['Total Grant Value']:,.0f}" for year in option_years]
+        }
+        option_df = pd.DataFrame(option_data)
+        st.dataframe(option_df, use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.error(f"Error displaying options summary table: {str(e)}")
+        st.write("Please check your inputs for potential issues.")
     
-    st.pyplot(fig)
-
-# Combined Value tab
-with tab3:
-    st.subheader("Combined Grant Value at Different PBT Growth Rates")
-    
-    # Calculate combined values for different PBT rates with 0% redemption
-    pbt_rates = [0.15, 0.20]  # 15% and 20%
-    pbt_labels = ["15% PBT Growth", "20% PBT Growth"]
-    
-    combined_values_by_pbt = []
-    
-    for pbt_rate in pbt_rates:
-        common_at_pbt = calculate_common_share_values_for_viz(0, pbt_rate)  # 0% redemption
-        option_at_pbt = calculate_option_values_for_viz(0, pbt_rate)  # 0% redemption
+    # Options Sensitivity Analysis (redemption rates with fixed 20% PBT growth)
+    try:
+        st.subheader("Option Value Sensitivity to Redemption Rate (£ thousands)")
+        st.caption("Fixed assumption: PBT Growth Rate = 20%")
         
-        # Combined value
-        combined_value = common_at_pbt["Total Grant Value ($)"] + option_at_pbt["Total Grant Value ($)"]
-        combined_values_by_pbt.append(combined_value.iloc[1:10])  # Years 1-9
+        # Fixed PBT growth of 20%
+        fixed_growth = 0.20
+        
+        # Redemption rates to analyze
+        redemption_rates = [0.00, 0.05, 0.10]  # 0%, 5%, 10%
+        
+        # Generate data for each redemption rate
+        chart_data = {}
+        
+        # Calculate values for each redemption rate
+        for rate in redemption_rates:
+            rate_results = calculate_results(fixed_growth, None, rate)
+            chart_data[f"{int(rate*100)}% Redemption"] = [
+                int(round(rate_results[year]['Total Grant Value'] / 1000, 0))
+                for year in option_years
+            ]
+        
+        # Create DataFrame with year labels as strings to maintain formatting
+        year_labels = [str(year) for year in option_years]
+        chart_df = pd.DataFrame(chart_data, index=year_labels)
+        
+        # Plot line chart
+        st.line_chart(chart_df)
+    except Exception as e:
+        st.warning(f"Could not display option sensitivity chart: {str(e)}")
+        st.write("Please check your inputs for potential issues.")
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for i, pbt_rate in enumerate(pbt_rates):
-        ax.plot(range(1, 10), combined_values_by_pbt[i], marker='o', label=f"{int(pbt_rate*100)}% PBT Growth")
-    
-    ax.set_xlabel('Year')
-    ax.set_ylabel('Combined Grant Value ($)')
-    ax.set_title('Combined Grant Value with No Share Redemption')
-    ax.legend()
-    ax.grid(True)
-    
-    st.pyplot(fig)
+    # Add disclaimer at bottom of tab
+    st.markdown("---")
+    st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
 
-# Download button
-st.header("Download Results")
-csv_common = common_results.to_csv().encode('utf-8')
-csv_options = options_results.to_csv().encode('utf-8')
-csv_combined = combined_results.to_csv().encode('utf-8')
-
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.download_button(
-        label="Download Common Share Data",
-        data=csv_common,
-        file_name="common_share_values.csv",
-        mime="text/csv",
-    )
-with col2:
-    st.download_button(
-        label="Download A-Share/Options Data",
-        data=csv_options,
-        file_name="options_values.csv",
-        mime="text/csv",
-    )
-with col3:
-    st.download_button(
-        label="Download Combined Data",
-        data=csv_combined,
-        file_name="combined_values.csv",
-        mime="text/csv",
-    )
+# Tab 3: Combined Analysis
+if total_common_shares > 0:
+    with tab3:
+        st.header("Combined Analysis")
+        st.markdown(f"**Common Share Redemption Rate: {int(common_redemption_rate*100)}%, A-Share/Options Redemption Rate: {int(option_redemption_rate*100)}%, PBT Growth: {int(pbt_growth_rate*100)}%**")
+        
+        # Combined Summary Table
+        combined_years = list(range(2025, 2036))
+        combined_data = {
+            "Year": combined_years,
+            "Share Price (£)": [f"£{results[year]['Share Price']:.0f}" for year in combined_years],
+            "Common Share Value (£)": [f"£{results[year]['Total Common Share Value']:,.0f}" for year in combined_years],
+            "A-Share/Options Value (£)": [f"£{results[year]['Total Grant Value']:,.0f}" for year in combined_years],
+            "Combined Total Value (£)": [f"£{results[year]['Combined Total Value']:,.0f}" for year in combined_years]
+        }
+        combined_df = pd.DataFrame(combined_data)
+        st.dataframe(combined_df, use_container_width=True, hide_index=True)
+        
+        # Combined Sensitivity Analysis (PBT growth rates with fixed 0% redemption)
+        try:
+            st.subheader("Combined Value Sensitivity to PBT Growth Rate (£ thousands)")
+            st.caption("Fixed assumption: Redemption Rate = 0%")
+            
+            # Fixed redemption rate of 0%
+            fixed_redemption = 0.00
+            
+            # Growth rates to analyze
+            growth_rates = [0.15, 0.20]  # 15%, 20%
+            
+            # Generate data for each growth rate
+            chart_data = {}
+            
+            # Calculate values for each growth rate
+            for rate in growth_rates:
+                rate_results = calculate_results(rate, fixed_redemption, fixed_redemption)
+                chart_data[f"{int(rate*100)}% Growth"] = [
+                    int(round(rate_results[year]['Combined Total Value'] / 1000, 0))
+                    for year in combined_years
+                ]
+            
+            # Create DataFrame with year labels as strings to maintain formatting
+            year_labels = [str(year) for year in combined_years]
+            chart_df = pd.DataFrame(chart_data, index=year_labels)
+            
+            # Plot line chart
+            st.line_chart(chart_df)
+        except Exception as e:
+            st.warning(f"Could not display combined sensitivity chart: {str(e)}")
+            st.write("Please check your inputs for potential issues.")
+        
+        # Add disclaimer at bottom of tab
+        st.markdown("---")
+        st.caption("**Disclaimer**: Illustrative Only, future valuation is not guaranteed and redemption plans subject to management decision.")
