@@ -11,7 +11,7 @@ st.set_page_config(
 
 # Add app title and description at top of page
 st.title("OakNorth Grants Working Sheet")
-st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value.")
+st.markdown("This working sheet allows you to analyze the impact of different growth and share redemption rates on OakNorth grants value. Grant values calculated are illustrative only, actual value may change depending on indivisual grant vesting schedules.")
 
 # Sidebar for inputs
 st.sidebar.header("Input Parameters")
@@ -97,28 +97,14 @@ st.sidebar.subheader("Cumulative Vesting Schedule")
 # Define vesting_method variable before it's used
 vesting_method = "Custom Vesting"  # Default value
 
-# Set default values for all years
-default_values = {
-    2025: 60000,
-    2026: 70000,
-    2027: 80000,
-    2028: 90000,
-    2029: 100000
-}
-
 # Initialize vested_shares_input dictionary with all years
 years_range = range(2025, 2036)
 vested_shares_input = {}
 
-# Fill default values for all years with safety checks
+# Fill default values for all years - set to total grant shares for all years
 for year in years_range:
-    if year in default_values:
-        # Ensure we don't exceed the total grant shares
-        default_value = min(default_values[year], total_grant_shares) 
-        vested_shares_input[year] = default_value
-    else:
-        # Ensure we don't exceed the total grant shares
-        vested_shares_input[year] = min(100000, total_grant_shares)
+    # Set all years to total grant shares
+    vested_shares_input[year] = total_grant_shares
 
 # Create columns for input layout
 col1, col2 = st.sidebar.columns(2)
@@ -141,9 +127,7 @@ if vesting_method == "Custom Vesting":
     try:
         with col1:
             for year in first_half:
-                default_value = default_values.get(year, 100000)  # Use the default values dictionary
-                # Ensure default value doesn't exceed total grant shares
-                default_value = min(default_value, int(total_grant_shares))
+                default_value = total_grant_shares  # Use total grant shares as default
                 # Custom number input without +/- buttons
                 vested_shares_input[year] = st.text_input(
                     f"{year}",
@@ -160,7 +144,7 @@ if vesting_method == "Custom Vesting":
         
         with col2:
             for year in second_half:
-                default_value = min(100000, int(total_grant_shares))
+                default_value = total_grant_shares
                 # Custom number input without +/- buttons
                 vested_shares_input[year] = st.text_input(
                     f"{year}",
@@ -351,7 +335,7 @@ def calculate_results(growth_rate=None, custom_common_redemption=None, custom_op
     # Safely get vested shares for 2025 with a fallback
     vested_2025 = vested_shares_input.get(2025, 0)
     if vested_2025 is None or vested_2025 < 0 or vested_2025 > total_grant_shares:
-        vested_2025 = min(60000, total_grant_shares)  # Use default with constraint
+        vested_2025 = total_grant_shares  # Use total grant shares as default
         
     results[2025]['Vested Shares'] = vested_2025
     results[2025]['Redeemed Shares'] = 0
